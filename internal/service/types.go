@@ -77,6 +77,8 @@ const (
 	RouteShutdown = APIPrefix + "/shutdown"
 	// RouteSchema is the endpoint for graph schema introspection.
 	RouteSchema = APIPrefix + "/schema"
+	// RoutePackageMap is the endpoint for package-level import architecture maps.
+	RoutePackageMap = APIPrefix + "/package/map"
 	// RouteEmbed is the endpoint to trigger background embedding.
 	RouteEmbed = APIPrefix + "/embed"
 	// RouteEmbedStatus is the endpoint to check embedding progress.
@@ -97,17 +99,24 @@ const (
 	MethodStatus             = "status"
 	MethodShutdown           = "shutdown"
 	MethodSchema             = "schema"
+	MethodPackageMap         = "package_map"
 	MethodEmbed              = "embed"
 	MethodEmbedStatus        = "embed_status"
 	MethodPluginIngest       = "plugin_ingest"
 	MethodPluginIngestStatus = "plugin_ingest_status"
 )
 
+const (
+	PackageMapFormatJSON    = "json"
+	PackageMapFormatMermaid = "mermaid"
+	PackageMapFormatDOT     = "dot"
+)
+
 // AllMethods lists every valid method name.
 var AllMethods = []string{
 	MethodQuery, MethodContext, MethodCypher, MethodImpact,
 	MethodCat, MethodReload, MethodStatus, MethodShutdown,
-	MethodSchema, MethodEmbed, MethodEmbedStatus, MethodPluginIngest, MethodPluginIngestStatus,
+	MethodSchema, MethodPackageMap, MethodEmbed, MethodEmbedStatus, MethodPluginIngest, MethodPluginIngestStatus,
 }
 
 // MethodToRoute maps method names to their HTTP route.
@@ -121,10 +130,26 @@ var MethodToRoute = map[string]string{
 	MethodStatus:             RouteStatus,
 	MethodShutdown:           RouteShutdown,
 	MethodSchema:             RouteSchema,
+	MethodPackageMap:         RoutePackageMap,
 	MethodEmbed:              RouteEmbed,
 	MethodEmbedStatus:        RouteEmbedStatus,
 	MethodPluginIngest:       RoutePluginIngest,
 	MethodPluginIngestStatus: RoutePluginIngestStatus,
+}
+
+// NormalizePackageMapFormat returns the canonical package-map output format.
+// An empty request format defaults to JSON; unsupported values return "".
+func NormalizePackageMapFormat(format string) string {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", PackageMapFormatJSON:
+		return PackageMapFormatJSON
+	case PackageMapFormatMermaid:
+		return PackageMapFormatMermaid
+	case PackageMapFormatDOT:
+		return PackageMapFormatDOT
+	default:
+		return ""
+	}
 }
 
 // Response wraps all API responses with a uniform envelope.
@@ -319,6 +344,7 @@ type ToolBackend interface {
 	Cypher(CypherRequest) (*CypherResult, error)
 	Impact(ImpactRequest) (*ImpactResult, error)
 	Schema(SchemaRequest) (*SchemaResult, error)
+	PackageMap(PackageMapRequest) (*PackageMapResult, error)
 }
 
 // SchemaRequest is the JSON body for POST /api/schema.
@@ -335,6 +361,61 @@ type SchemaResult struct {
 	Properties []string           `json:"properties"`
 	TotalNodes int                `json:"totalNodes"`
 	TotalEdges int                `json:"totalEdges"`
+}
+
+// PackageMapRequest is the JSON body for POST /api/package/map.
+type PackageMapRequest struct {
+	Repo         string `json:"repo"`
+	Format       string `json:"format,omitempty"` // "json" (default), "mermaid", or "dot"
+	Limit        int    `json:"limit,omitempty"`
+	MinCount     int    `json:"minCount,omitempty"`
+	IncludeTests bool   `json:"includeTests,omitempty"`
+	IncludeFiles bool   `json:"includeFiles,omitempty"`
+}
+
+// PackageMapResult is the result payload for a package architecture map.
+// It aggregates resolved internal File->File IMPORTS edges into package-level
+// relationships. Content is populated for rendered formats such as Mermaid and DOT.
+type PackageMapResult struct {
+	Repo     string              `json:"repo"`
+	Packages []PackageMapPackage `json:"packages"`
+	Imports  []PackageMapImport  `json:"imports"`
+	Summary  PackageMapSummary   `json:"summary"`
+	Content  string              `json:"content,omitempty"`
+}
+
+// PackageMapPackage describes one package/folder in the package map.
+type PackageMapPackage struct {
+	Path      string `json:"path"`
+	FileCount int    `json:"fileCount"`
+}
+
+// PackageMapImport describes one aggregate package import edge.
+type PackageMapImport struct {
+	From            string                 `json:"from"`
+	To              string                 `json:"to"`
+	Count           int                    `json:"count"`
+	SourceFileCount int                    `json:"sourceFileCount"`
+	Files           []PackageMapFileImport `json:"files,omitempty"`
+	FilesTruncated  bool                   `json:"filesTruncated,omitempty"`
+}
+
+// PackageMapFileImport is bounded file-level evidence for one package import.
+type PackageMapFileImport struct {
+	FromFile string `json:"fromFile"`
+	ToFile   string `json:"toFile"`
+}
+
+// PackageMapSummary contains total and shown counts for a package map.
+type PackageMapSummary struct {
+	TotalEdges         int  `json:"totalEdges"`
+	ShownEdges         int  `json:"shownEdges"`
+	TotalImports       int  `json:"totalImports"`
+	ShownImports       int  `json:"shownImports"`
+	PackageCount       int  `json:"packageCount"`
+	SkippedSelfImports int  `json:"skippedSelfImports"`
+	SkippedTestImports int  `json:"skippedTestImports"`
+	Truncated          bool `json:"truncated"`
 }
 
 // NodeLabelSummary describes a node label and its count.

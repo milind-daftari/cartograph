@@ -68,6 +68,7 @@ type CLI struct {
 	Query      QueryCmd         `cmd:"" help:"Search the knowledge graph for execution flows."`
 	Context    ContextCmd       `cmd:"" help:"360-degree view of a code symbol."`
 	Impact     ImpactCmd        `cmd:"" help:"Blast radius: what breaks if you change a symbol."`
+	PackageMap PackageMapCmd    `cmd:"" name:"package-map" help:"Show package-level import architecture from resolved internal imports."`
 	Cypher     CypherCmd        `cmd:"" help:"Execute raw Cypher query against the knowledge graph."`
 	Schema     SchemaCmd        `cmd:"" help:"Show graph schema (node labels, edge types, properties) to assist Cypher queries."`
 	Serve      ServeCmd         `cmd:"" help:"Manage the long-running HTTP service (for MCP / editor integrations)." needs-client:"false"`
@@ -2080,6 +2081,52 @@ func (c *ImpactCmd) Run(cli *CLI) error {
 	} else {
 		fmt.Println("No affected symbols found.")
 	}
+	return nil
+}
+
+// PackageMapCmd shows package-level import architecture.
+type PackageMapCmd struct {
+	Repo         string `help:"Repository name." short:"r"`
+	Format       string `help:"Output format." enum:"json,mermaid,dot" default:"json"`
+	Limit        int    `help:"Maximum package import edges to return." default:"0"`
+	MinCount     int    `help:"Minimum resolved file import count for a package edge." name:"min-count" default:"1"`
+	IncludeTests bool   `help:"Include test and example files in results." name:"include-tests"`
+	IncludeFiles bool   `help:"Include bounded file-level evidence for each package edge." name:"include-files"`
+}
+
+func (c *PackageMapCmd) Run(cli *CLI) error {
+	if cli.Client == nil {
+		fmt.Println(errNoService)
+		return nil
+	}
+
+	repo, err := resolveRepo(c.Repo)
+	if err != nil {
+		return fmt.Errorf("package-map: %w", err)
+	}
+
+	format := service.NormalizePackageMapFormat(c.Format)
+	if format == "" {
+		return fmt.Errorf("package-map: unsupported format %q", c.Format)
+	}
+	req := service.PackageMapRequest{
+		Repo:         repo,
+		Format:       format,
+		Limit:        c.Limit,
+		MinCount:     c.MinCount,
+		IncludeTests: c.IncludeTests,
+		IncludeFiles: c.IncludeFiles,
+	}
+	result, err := cli.Client.PackageMap(req)
+	if err != nil {
+		return fmt.Errorf("package-map: %w", err)
+	}
+
+	out, err := formatPackageMapOutput(result, format)
+	if err != nil {
+		return fmt.Errorf("package-map: %w", err)
+	}
+	fmt.Print(out)
 	return nil
 }
 

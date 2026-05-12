@@ -46,6 +46,23 @@ cartograph cypher "MATCH (p:Process) RETURN p.name, p.importance, p.heuristicLab
 
 **Approach:** Start with `schema` to understand the graph shape → `query` for orientation → `context --depth 3` to trace flows → `cypher` for custom structural queries.
 
+## Architecture Orientation
+
+Use when you need a fast package-level map before drilling into symbols and execution flows.
+
+```bash
+# Start with machine-readable package imports for large repositories
+cartograph package-map --format json --limit 500
+
+# Render a bounded diagram for review notes or docs
+cartograph package-map --format mermaid --limit 50 --min-count 2
+
+# Export to Graphviz-compatible tooling
+cartograph package-map --format dot --limit 50 --min-count 2
+```
+
+**Approach:** Start with `package-map --format json` to identify package boundaries and high-volume internal imports. Use Mermaid or DOT with `--limit` and `--min-count` for readable diagrams, then investigate important package edges with `query`, `context`, `impact`, or Cypher.
+
 ## Debugging
 
 Use when tracing errors, finding callers/callees, or understanding call chains.

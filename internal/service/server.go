@@ -703,6 +703,7 @@ func (s *Server) setupRoutes() *http.ServeMux {
 	mux.HandleFunc(RouteReload, s.handleReload)
 	mux.HandleFunc(RouteStatus, s.handleStatus)
 	mux.HandleFunc(RouteSchema, s.handleSchema)
+	mux.HandleFunc(RoutePackageMap, s.handlePackageMap)
 	mux.HandleFunc(RouteShutdown, s.handleShutdown)
 	mux.HandleFunc(RouteEmbed, s.handleEmbed)
 	mux.HandleFunc(RouteEmbedStatus, s.handleEmbedStatus)

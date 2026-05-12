@@ -34,6 +34,16 @@ type ImpactInput struct {
 	Depth     int    `json:"depth,omitempty" jsonschema:"Maximum traversal depth (default 3)."`
 }
 
+// PackageMapInput is the input schema for the cartograph_package_map tool.
+type PackageMapInput struct {
+	Repo         string `json:"repo,omitempty" jsonschema:"Repository name. Auto-detected from the working directory if omitted."`
+	Format       string `json:"format,omitempty" jsonschema:"Output format: json, mermaid, or dot. Default json."`
+	Limit        int    `json:"limit,omitempty" jsonschema:"Maximum package import edges to return. Defaults depend on format."`
+	MinCount     int    `json:"minCount,omitempty" jsonschema:"Minimum resolved file import count for a package edge. Default 1."`
+	IncludeTests bool   `json:"includeTests,omitempty" jsonschema:"Include imports involving test and example files. Default false."`
+	IncludeFiles bool   `json:"includeFiles,omitempty" jsonschema:"Include bounded file-level evidence for each package edge. Default false."`
+}
+
 // CypherInput is the input schema for the cartograph_cypher tool.
 type CypherInput struct {
 	Repo  string `json:"repo,omitempty" jsonschema:"Repository name. Auto-detected from the working directory if omitted."`
@@ -72,6 +82,11 @@ func (s *Server) registerTools() {
 		Name:        "cartograph_impact",
 		Description: "Analyze the blast radius of changing a symbol. Shows all functions and files affected downstream (what breaks) or upstream (what calls this). Use this before refactoring to understand risk.",
 	}, s.handleImpact)
+
+	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
+		Name:        "cartograph_package_map",
+		Description: "Show package-level import architecture from resolved internal imports. Supports JSON, Mermaid, and DOT output while keeping structured package/import data.",
+	}, s.handlePackageMap)
 
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
 		Name:        "cartograph_cypher",
@@ -155,6 +170,25 @@ func (s *Server) handleImpact(ctx context.Context, _ *sdkmcp.CallToolRequest, in
 	})
 	if err != nil {
 		return toolError("impact failed: %v", err)
+	}
+	return jsonResult(result)
+}
+
+func (s *Server) handlePackageMap(ctx context.Context, _ *sdkmcp.CallToolRequest, input PackageMapInput) (*sdkmcp.CallToolResult, any, error) {
+	repo, err := resolveRepo(ctx, input.Repo)
+	if err != nil {
+		return toolError("%v", err)
+	}
+	result, err := s.client.PackageMap(service.PackageMapRequest{
+		Repo:         repo,
+		Format:       input.Format,
+		Limit:        input.Limit,
+		MinCount:     input.MinCount,
+		IncludeTests: input.IncludeTests,
+		IncludeFiles: input.IncludeFiles,
+	})
+	if err != nil {
+		return toolError("package map failed: %v", err)
 	}
 	return jsonResult(result)
 }

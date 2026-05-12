@@ -66,6 +66,10 @@ cartograph context UserService
 
 # What breaks if you change something?
 cartograph impact validateUser
+
+# Map package-level internal imports (JSON, Mermaid, or DOT)
+cartograph package-map --format json
+cartograph package-map --format mermaid --limit 50
 ```
 
 That's it. The graph is built, persisted locally, and ready to query.

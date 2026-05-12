@@ -15,22 +15,24 @@ import (
 // mockClient implements the Client interface with canned responses
 // for testing the MCP tool handlers without needing a real graph.
 type mockClient struct {
-	queryResult   *service.QueryResult
-	contextResult *service.ContextResult
-	impactResult  *service.ImpactResult
-	cypherResult  *service.CypherResult
-	catResult     *service.CatResult
-	schemaResult  *service.SchemaResult
-	statusResult  *service.StatusResult
-	err           error
+	queryResult      *service.QueryResult
+	contextResult    *service.ContextResult
+	impactResult     *service.ImpactResult
+	packageMapResult *service.PackageMapResult
+	cypherResult     *service.CypherResult
+	catResult        *service.CatResult
+	schemaResult     *service.SchemaResult
+	statusResult     *service.StatusResult
+	err              error
 
 	// capture last request for assertions
-	lastQueryReq   service.QueryRequest
-	lastContextReq service.ContextRequest
-	lastImpactReq  service.ImpactRequest
-	lastCypherReq  service.CypherRequest
-	lastCatReq     service.CatRequest
-	lastSchemaReq  service.SchemaRequest
+	lastQueryReq      service.QueryRequest
+	lastContextReq    service.ContextRequest
+	lastImpactReq     service.ImpactRequest
+	lastPackageMapReq service.PackageMapRequest
+	lastCypherReq     service.CypherRequest
+	lastCatReq        service.CatRequest
+	lastSchemaReq     service.SchemaRequest
 }
 
 func (m *mockClient) Query(req service.QueryRequest) (*service.QueryResult, error) {
@@ -51,6 +53,11 @@ func (m *mockClient) Cypher(req service.CypherRequest) (*service.CypherResult, e
 func (m *mockClient) Impact(req service.ImpactRequest) (*service.ImpactResult, error) {
 	m.lastImpactReq = req
 	return m.impactResult, m.err
+}
+
+func (m *mockClient) PackageMap(req service.PackageMapRequest) (*service.PackageMapResult, error) {
+	m.lastPackageMapReq = req
+	return m.packageMapResult, m.err
 }
 
 func (m *mockClient) Cat(req service.CatRequest) (*service.CatResult, error) {
@@ -108,13 +115,14 @@ func TestToolsList(t *testing.T) {
 	}
 
 	expectedTools := map[string]bool{
-		"cartograph_query":   false,
-		"cartograph_context": false,
-		"cartograph_impact":  false,
-		"cartograph_cypher":  false,
-		"cartograph_cat":     false,
-		"cartograph_schema":  false,
-		"cartograph_status":  false,
+		"cartograph_query":       false,
+		"cartograph_context":     false,
+		"cartograph_impact":      false,
+		"cartograph_package_map": false,
+		"cartograph_cypher":      false,
+		"cartograph_cat":         false,
+		"cartograph_schema":      false,
+		"cartograph_status":      false,
 	}
 
 	for _, tool := range tools.Tools {
@@ -238,6 +246,68 @@ func TestImpactTool(t *testing.T) {
 	}
 	if mock.lastImpactReq.Depth != 3 {
 		t.Errorf("depth = %d, want %d", mock.lastImpactReq.Depth, 3)
+	}
+}
+
+func TestPackageMapTool(t *testing.T) {
+	mock := &mockClient{
+		packageMapResult: &service.PackageMapResult{
+			Repo: "myrepo",
+			Packages: []service.PackageMapPackage{
+				{Path: "cmd", FileCount: 2},
+				{Path: "internal/service", FileCount: 3},
+			},
+			Imports: []service.PackageMapImport{{
+				From:            "cmd",
+				To:              "internal/service",
+				Count:           2,
+				SourceFileCount: 1,
+			}},
+			Summary: service.PackageMapSummary{
+				TotalEdges:   1,
+				ShownEdges:   1,
+				TotalImports: 2,
+				ShownImports: 2,
+				PackageCount: 2,
+			},
+			Content: "flowchart LR\n",
+		},
+	}
+	session := connectTestServer(t, mock)
+	defer session.Close()
+
+	ctx := context.Background()
+	res, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
+		Name: "cartograph_package_map",
+		Arguments: map[string]any{
+			"repo":         "myrepo",
+			"format":       "mermaid",
+			"limit":        float64(10),
+			"minCount":     float64(2),
+			"includeFiles": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool returned error: %v", res.Content)
+	}
+
+	if mock.lastPackageMapReq.Repo != "myrepo" || mock.lastPackageMapReq.Format != "mermaid" {
+		t.Fatalf("unexpected request: %#v", mock.lastPackageMapReq)
+	}
+	if mock.lastPackageMapReq.Limit != 10 || mock.lastPackageMapReq.MinCount != 2 || !mock.lastPackageMapReq.IncludeFiles {
+		t.Fatalf("unexpected request options: %#v", mock.lastPackageMapReq)
+	}
+
+	text := extractText(t, res)
+	var result service.PackageMapResult
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if result.Content != "flowchart LR\n" || len(result.Imports) != 1 {
+		t.Fatalf("unexpected result: %#v", result)
 	}
 }
 
@@ -453,6 +523,15 @@ func TestStreamableHTTPTransport(t *testing.T) {
 				{Name: "handleHTTP", Relevance: 0.9},
 			},
 		},
+		packageMapResult: &service.PackageMapResult{
+			Repo: "myrepo",
+			Imports: []service.PackageMapImport{{
+				From:  "cmd",
+				To:    "internal/service",
+				Count: 1,
+			}},
+			Summary: service.PackageMapSummary{TotalEdges: 1, ShownEdges: 1},
+		},
 		statusResult: &service.StatusResult{Running: true},
 	}
 
@@ -485,8 +564,8 @@ func TestStreamableHTTPTransport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	if len(tools.Tools) != 7 {
-		t.Errorf("tool count = %d, want 7", len(tools.Tools))
+	if len(tools.Tools) != 8 {
+		t.Errorf("tool count = %d, want 8", len(tools.Tools))
 	}
 
 	res, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
@@ -507,6 +586,17 @@ func TestStreamableHTTPTransport(t *testing.T) {
 	}
 	if len(result.Processes) != 1 || result.Processes[0].Name != "handleHTTP" {
 		t.Errorf("unexpected processes: %+v", result.Processes)
+	}
+
+	pmRes, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
+		Name:      "cartograph_package_map",
+		Arguments: map[string]any{"repo": "myrepo", "format": "json"},
+	})
+	if err != nil {
+		t.Fatalf("PackageMap CallTool: %v", err)
+	}
+	if pmRes.IsError {
+		t.Fatalf("package map tool returned error: %v", pmRes.Content)
 	}
 }
 

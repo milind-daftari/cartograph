@@ -104,6 +104,21 @@ func TestMemoryClient_Impact(t *testing.T) {
 	}
 }
 
+func TestMemoryClient_PackageMap(t *testing.T) {
+	mc := newTestMemoryClient(t)
+	res, err := mc.PackageMap(PackageMapRequest{Repo: "testrepo", Format: "json", Limit: 10})
+	if err != nil {
+		t.Fatalf("package map: %v", err)
+	}
+	if res == nil {
+		t.Fatal("nil result")
+		return
+	}
+	if res.Repo != "testrepo" {
+		t.Fatalf("Repo = %q, expected testrepo", res.Repo)
+	}
+}
+
 func TestMemoryClient_Status(t *testing.T) {
 	mc := newTestMemoryClient(t)
 	res, err := mc.Status()

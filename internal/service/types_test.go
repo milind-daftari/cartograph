@@ -106,6 +106,7 @@ func TestAllMethodsComplete(t *testing.T) {
 		MethodStatus:             true,
 		MethodShutdown:           true,
 		MethodSchema:             true,
+		MethodPackageMap:         true,
 		MethodEmbed:              true,
 		MethodEmbedStatus:        true,
 		MethodPluginIngest:       true,
@@ -140,19 +141,79 @@ func TestMethodToRouteComplete(t *testing.T) {
 
 func TestRouteConstants(t *testing.T) {
 	routes := map[string]string{
-		"query":    RouteQuery,
-		"context":  RouteContext,
-		"cypher":   RouteCypher,
-		"impact":   RouteImpact,
-		"reload":   RouteReload,
-		"status":   RouteStatus,
-		"shutdown": RouteShutdown,
+		"query":       RouteQuery,
+		"context":     RouteContext,
+		"cypher":      RouteCypher,
+		"impact":      RouteImpact,
+		"reload":      RouteReload,
+		"status":      RouteStatus,
+		"shutdown":    RouteShutdown,
+		"schema":      RouteSchema,
+		"package/map": RoutePackageMap,
 	}
 	for method, route := range routes {
 		expected := APIPrefix + "/" + method
 		if route != expected {
 			t.Errorf("Route%s = %q, expected %q", method, route, expected)
 		}
+	}
+}
+
+func TestPackageMapRequestJSON(t *testing.T) {
+	req := PackageMapRequest{
+		Repo:         "cartograph",
+		Format:       "mermaid",
+		Limit:        100,
+		MinCount:     2,
+		IncludeTests: true,
+		IncludeFiles: true,
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var got PackageMapRequest
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got != req {
+		t.Fatalf("round trip = %#v, expected %#v", got, req)
+	}
+}
+
+func TestPackageMapResultJSON(t *testing.T) {
+	result := PackageMapResult{
+		Repo:     "cartograph",
+		Packages: []PackageMapPackage{{Path: "cmd", FileCount: 2}},
+		Imports: []PackageMapImport{{
+			From:            "cmd",
+			To:              "internal/service",
+			Count:           3,
+			SourceFileCount: 1,
+			Files: []PackageMapFileImport{{
+				FromFile: "cmd/root.go",
+				ToFile:   "internal/service/types.go",
+			}},
+		}},
+		Summary: PackageMapSummary{
+			TotalEdges:   1,
+			ShownEdges:   1,
+			TotalImports: 3,
+			ShownImports: 3,
+			PackageCount: 2,
+		},
+		Content: "flowchart LR\n",
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var got PackageMapResult
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Repo != result.Repo || got.Content != result.Content || len(got.Imports) != 1 {
+		t.Fatalf("unexpected round trip: %#v", got)
 	}
 }
 

@@ -347,6 +347,19 @@ func (mc *MemoryClient) Schema(req SchemaRequest) (*SchemaResult, error) {
 	return res, nil
 }
 
+// PackageMap returns the package-level import architecture map for a repo.
+func (mc *MemoryClient) PackageMap(req PackageMapRequest) (*PackageMapResult, error) {
+	be, err := mc.getBackend(req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	res, err := be.PackageMap(req)
+	if err != nil {
+		return nil, fmt.Errorf("memory client: package map %q: %w", req.Repo, err)
+	}
+	return res, nil
+}
+
 // Shutdown is a no-op for MemoryClient (no server to shut down).
 func (mc *MemoryClient) Shutdown() error {
 	return nil

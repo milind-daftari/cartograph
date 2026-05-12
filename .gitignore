@@ -41,3 +41,10 @@ internal/embedding/local/.zig-target.stamp
 
 # Task runner cache
 .task/
+
+# Local Go build/module caches used by sandboxed verification
+*-go-cache/
+*-go-modcache/
+
+# Local security scan artifacts
+.codex-security-scans/

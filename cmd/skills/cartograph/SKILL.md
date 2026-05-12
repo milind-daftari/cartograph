@@ -344,8 +344,8 @@ or mentions "wiki" in the context of documentation generation.
 ### 2. CLI Commands
 
 **Triggers:** User mentions a specific command (`analyze`, `query`, `context`,
-`impact`, `cypher`, `schema`, `cat`, `clone`, `models`, `serve`, `mcp`,
-`skills`, `list`, `status`, `clean`, `wiki`), command flags, graph schema,
+`impact`, `package-map`, `cypher`, `schema`, `cat`, `clone`, `models`, `serve`,
+`mcp`, `skills`, `list`, `status`, `clean`, `wiki`), command flags, graph schema,
 Cypher syntax, node labels, relationship types, embedding configuration,
 model management, MCP configuration, or needs a command reference.
 

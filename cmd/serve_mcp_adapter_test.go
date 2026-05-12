@@ -144,6 +144,26 @@ func TestServerMCPClient_Impact(t *testing.T) {
 	}
 }
 
+func TestServerMCPClient_PackageMap(t *testing.T) {
+	client := newTestServerMCPClient(t, "")
+
+	result, err := client.PackageMap(service.PackageMapRequest{
+		Repo:   "testrepo",
+		Format: "json",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("PackageMap: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil package map result")
+		return
+	}
+	if result.Repo != "testrepo" {
+		t.Fatalf("Repo = %q, expected testrepo", result.Repo)
+	}
+}
+
 func TestServerMCPClient_Cypher(t *testing.T) {
 	client := newTestServerMCPClient(t, "")
 

@@ -34,7 +34,7 @@ Most structural code questions (blast radius, call chains, process ownership, su
 | 10  | CloudGraph                  | 🔲 Planned | High     | Plugin-based cloud/infra data sources (AWS, GitHub, k8s, SaaS) ingested into the knowledge graph; query infrastructure alongside code via Cypher |
 | 11  | Schema Versioning           | ✅ Done    | Medium   | Index metadata stores schema/algorithm versions and compatibility checks prompt re-indexing on incompatible upgrades                             |
 | 12  | Trigram Regex Search        | 🔲 Planned | Medium   | `google/codesearch` trigram index; `query --regex`; MCP `regex_search` tool                                                                      |
-| 13  | Package Architecture Map    | 🔲 Planned | Medium   | Aggregate IMPORTS into package-level graph; DOT/Mermaid/JSON output                                                                              |
+| 13  | Package Architecture Map    | 🚧 In Progress    | Medium   | Aggregate IMPORTS into package-level graph; DOT/Mermaid/JSON output                                                                              |
 | 14  | Architecture Summary        | 🔲 Planned | Medium   | Auto-generate subsystem overview from community + centrality + entry points                                                                      |
 | 15  | Dead Code Detection         | 🔲 Planned | Medium   | Reachability BFS from entry points; transitive dead code detection                                                                               |
 | 16  | Watch Mode                  | 🔲 Planned | Medium   | `fsnotify` + incremental re-index; graph stays current while you code                                                                            |

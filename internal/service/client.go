@@ -191,6 +191,15 @@ func (c *Client) Schema(req SchemaRequest) (*SchemaResult, error) {
 	return &res, nil
 }
 
+// PackageMap retrieves a package-level import architecture map.
+func (c *Client) PackageMap(req PackageMapRequest) (*PackageMapResult, error) {
+	var res PackageMapResult
+	if err := c.do(http.MethodPost, RoutePackageMap, req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // Shutdown requests a graceful shutdown of the service.
 func (c *Client) Shutdown() error {
 	return c.do(http.MethodPost, RouteShutdown, nil, nil)

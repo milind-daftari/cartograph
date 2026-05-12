@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,6 +59,35 @@ func (stubBackend) Schema(req SchemaRequest) (*SchemaResult, error) {
 		RelTypes:   []RelTypeSummary{},
 		Properties: []string{},
 	}, nil
+}
+
+func (stubBackend) PackageMap(req PackageMapRequest) (*PackageMapResult, error) {
+	return &PackageMapResult{
+		Repo: req.Repo,
+		Packages: []PackageMapPackage{
+			{Path: "cmd", FileCount: 2},
+			{Path: "internal/service", FileCount: 3},
+		},
+		Imports: []PackageMapImport{{
+			From:            "cmd",
+			To:              "internal/service",
+			Count:           2,
+			SourceFileCount: 1,
+		}},
+		Summary: PackageMapSummary{
+			TotalEdges:   1,
+			ShownEdges:   1,
+			TotalImports: 2,
+			ShownImports: 2,
+			PackageCount: 2,
+		},
+	}, nil
+}
+
+type packageMapErrorBackend struct{ stubBackend }
+
+func (packageMapErrorBackend) PackageMap(PackageMapRequest) (*PackageMapResult, error) {
+	return nil, errors.New("package map failed")
 }
 
 // newTestServer returns a Server with an in-memory graph for "testrepo".
@@ -531,6 +561,130 @@ func TestHandleSchema_AmbiguousShortName(t *testing.T) {
 	req := httptest.NewRequestWithContext(context.Background(), "POST", RouteSchema, body)
 	rec := httptest.NewRecorder()
 	s.handleSchema(rec, req)
+
+	resp := decodeResponse(t, rec)
+	if resp.Error == nil {
+		t.Fatal("expected error for ambiguous short name")
+	}
+	if !strings.Contains(resp.Error.Message, "ambiguous") {
+		t.Errorf("error should mention 'ambiguous', got: %s", resp.Error.Message)
+	}
+}
+
+func TestHandlePackageMap(t *testing.T) {
+	s := newTestServer()
+	body := jsonBody(t, PackageMapRequest{Repo: "testrepo", Format: "json", Limit: 10})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", RoutePackageMap, body)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	resp := decodeResponse(t, rec)
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	data, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var result PackageMapResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("unmarshal package map result: %v", err)
+	}
+	if result.Repo != "testrepo" || len(result.Imports) != 1 {
+		t.Fatalf("unexpected package map result: repo=%q imports=%d", result.Repo, len(result.Imports))
+	}
+}
+
+func TestHandlePackageMapMissingRepo(t *testing.T) {
+	s := newTestServer()
+	body := jsonBody(t, PackageMapRequest{Format: "json"})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", RoutePackageMap, body)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+	resp := decodeResponse(t, rec)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "missing repo") {
+		t.Fatalf("expected missing repo error, got %#v", resp.Error)
+	}
+}
+
+func TestHandlePackageMapMethodNotAllowed(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequestWithContext(context.Background(), "GET", RoutePackageMap, nil)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rec.Code)
+	}
+}
+
+func TestHandlePackageMapRepoNotFound(t *testing.T) {
+	s := newTestServer()
+	body := jsonBody(t, PackageMapRequest{Repo: "missing"})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", RoutePackageMap, body)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+	resp := decodeResponse(t, rec)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "missing") {
+		t.Fatalf("expected missing repo error, got %#v", resp.Error)
+	}
+}
+
+func TestHandlePackageMapBackendError(t *testing.T) {
+	s := newTestServer()
+	s.backendFactory = func(repo string) ToolBackend {
+		if repo == "testrepo" {
+			return packageMapErrorBackend{}
+		}
+		return nil
+	}
+	body := jsonBody(t, PackageMapRequest{Repo: "testrepo"})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", RoutePackageMap, body)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+	resp := decodeResponse(t, rec)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "package map failed") {
+		t.Fatalf("expected backend error, got %#v", resp.Error)
+	}
+}
+
+func TestHandlePackageMapInvalidFormat(t *testing.T) {
+	s := newTestServer()
+	body := jsonBody(t, PackageMapRequest{Repo: "testrepo", Format: "svg"})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", RoutePackageMap, body)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+	resp := decodeResponse(t, rec)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "unsupported package map format") {
+		t.Fatalf("expected invalid format error, got %#v", resp.Error)
+	}
+}
+
+func TestHandlePackageMap_AmbiguousShortName(t *testing.T) {
+	s := newTestServerWithRegistry(t)
+	body := jsonBody(t, PackageMapRequest{Repo: "sdk"})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", RoutePackageMap, body)
+	rec := httptest.NewRecorder()
+	s.handlePackageMap(rec, req)
 
 	resp := decodeResponse(t, rec)
 	if resp.Error == nil {

@@ -120,6 +120,18 @@ func TestClientImpact(t *testing.T) {
 	}
 }
 
+func TestClientPackageMap(t *testing.T) {
+	cl := testClientServer(t)
+	res, err := cl.PackageMap(PackageMapRequest{Repo: "myrepo", Format: "json", Limit: 10})
+	if err != nil {
+		t.Fatalf("package map: %v", err)
+	}
+	if res == nil {
+		t.Fatal("nil result")
+		return
+	}
+}
+
 func TestClientReload(t *testing.T) {
 	cl := testClientServer(t)
 	err := cl.Reload(ReloadRequest{Repo: "myrepo"})

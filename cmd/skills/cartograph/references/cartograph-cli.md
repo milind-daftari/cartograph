@@ -171,6 +171,35 @@ cartograph impact validate -f src/validators/input.go
 
 **Output:** Target symbol + list of affected symbols with file locations and depth.
 
+### `cartograph package-map`
+
+Show package-level internal import architecture aggregated from resolved `File -> File` `IMPORTS` edges. This is a declared import map, not proof that every imported symbol is used at runtime.
+
+**Flags:**
+- `-r, --repo <name>` — Repository name (short names like `nomad` resolve automatically)
+- `--format <json|mermaid|dot>` — Output format (default: `json`)
+- `--limit <n>` — Maximum package import edges to return. Defaults depend on format.
+- `--min-count <n>` — Minimum resolved file import count for a package edge (default: 1)
+- `--include-tests` — Include imports involving test and example files (excluded by default)
+- `--include-files` — Include bounded file-level evidence for each package edge
+
+**Examples:**
+```bash
+# Machine-readable full architecture summary
+cartograph package-map --format json
+
+# Mermaid diagram for docs or Markdown
+cartograph package-map --format mermaid --limit 50
+
+# Graphviz DOT for graph tooling
+cartograph package-map --format dot --limit 50
+
+# Focus on stronger package relationships
+cartograph package-map --format json --min-count 2 --limit 500
+```
+
+**Output:** JSON includes packages, aggregate imports, exact total counts before truncation, and truncation metadata. Mermaid and DOT include bounded graph text for readable diagrams; use JSON for large repositories and automation.
+
 ### `cartograph cypher "<query>"`
 
 Execute raw OpenCypher queries against the knowledge graph.
@@ -502,6 +531,7 @@ available, it falls back to an in-process MemoryClient.
 | `cartograph_query` | Search the knowledge graph for execution flows and symbols |
 | `cartograph_context` | 360° view of a code symbol (callers, callees, processes) |
 | `cartograph_impact` | Blast radius analysis for a symbol |
+| `cartograph_package_map` | Package-level internal import architecture with JSON, Mermaid, or DOT output |
 | `cartograph_cypher` | Execute raw Cypher queries against the graph |
 | `cartograph_cat` | Read file contents from an indexed repository |
 | `cartograph_schema` | Show graph schema (node labels, edge types, counts) |

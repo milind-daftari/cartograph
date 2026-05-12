@@ -88,6 +88,8 @@ func TestServerSetupRoutesRegistered(t *testing.T) {
 		{"POST", RouteImpact, http.StatusBadRequest},  // missing body
 		{"POST", RouteReload, http.StatusBadRequest},  // missing body
 		{"GET", RouteStatus, http.StatusOK},
+		{"POST", RouteSchema, http.StatusBadRequest},     // missing body
+		{"POST", RoutePackageMap, http.StatusBadRequest}, // missing body
 		{"POST", RouteShutdown, http.StatusOK},
 	}
 

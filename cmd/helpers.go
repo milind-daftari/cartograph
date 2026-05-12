@@ -21,6 +21,7 @@ type ServiceClient interface {
 	Context(service.ContextRequest) (*service.ContextResult, error)
 	Cypher(service.CypherRequest) (*service.CypherResult, error)
 	Impact(service.ImpactRequest) (*service.ImpactResult, error)
+	PackageMap(service.PackageMapRequest) (*service.PackageMapResult, error)
 	Cat(service.CatRequest) (*service.CatResult, error)
 	Schema(service.SchemaRequest) (*service.SchemaResult, error)
 	Reload(service.ReloadRequest) error

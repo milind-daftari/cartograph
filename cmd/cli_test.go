@@ -19,19 +19,21 @@ const (
 )
 
 type mockClient struct {
-	queryCalled    bool
-	contextCalled  bool
-	cypherCalled   bool
-	impactCalled   bool
-	statusCalled   bool
-	reloadCalled   bool
-	shutdownCalled bool
+	queryCalled      bool
+	contextCalled    bool
+	cypherCalled     bool
+	impactCalled     bool
+	packageMapCalled bool
+	statusCalled     bool
+	reloadCalled     bool
+	shutdownCalled   bool
 
-	lastQueryReq   service.QueryRequest
-	lastContextReq service.ContextRequest
-	lastCypherReq  service.CypherRequest
-	lastImpactReq  service.ImpactRequest
-	lastReloadReq  service.ReloadRequest
+	lastQueryReq      service.QueryRequest
+	lastContextReq    service.ContextRequest
+	lastCypherReq     service.CypherRequest
+	lastImpactReq     service.ImpactRequest
+	lastPackageMapReq service.PackageMapRequest
+	lastReloadReq     service.ReloadRequest
 }
 
 func (m *mockClient) Query(req service.QueryRequest) (*service.QueryResult, error) {
@@ -83,6 +85,36 @@ func (m *mockClient) Impact(req service.ImpactRequest) (*service.ImpactResult, e
 		Target:   service.SymbolMatch{Name: "Foo", Label: "Function", FilePath: "foo.go", StartLine: 1},
 		Affected: []service.SymbolMatch{{Name: "bar", Label: "Function", FilePath: "bar.go", StartLine: 3}},
 		Depth:    5,
+	}, nil
+}
+
+func (m *mockClient) PackageMap(req service.PackageMapRequest) (*service.PackageMapResult, error) {
+	m.packageMapCalled = true
+	m.lastPackageMapReq = req
+	content := "flowchart LR\n  pkg0[\"cmd\"]\n  pkg1[\"internal/service\"]\n  pkg0 -->|\"4\"| pkg1\n"
+	if req.Format == "dot" {
+		content = "digraph PackageMap {\n  rankdir=LR;\n  pkg0 [label=\"cmd\"];\n  pkg1 [label=\"internal/service\"];\n  pkg0 -> pkg1 [label=\"4\"];\n}\n"
+	}
+	return &service.PackageMapResult{
+		Repo: req.Repo,
+		Packages: []service.PackageMapPackage{
+			{Path: "cmd", FileCount: 2},
+			{Path: "internal/service", FileCount: 3},
+		},
+		Imports: []service.PackageMapImport{{
+			From:            "cmd",
+			To:              "internal/service",
+			Count:           4,
+			SourceFileCount: 2,
+		}},
+		Summary: service.PackageMapSummary{
+			TotalEdges:   1,
+			ShownEdges:   1,
+			TotalImports: 4,
+			ShownImports: 4,
+			PackageCount: 2,
+		},
+		Content: content,
 	}, nil
 }
 
@@ -305,6 +337,79 @@ func TestImpactCmd(t *testing.T) {
 			t.Error("expected output to contain 'Affected'")
 		}
 	})
+}
+
+func TestPackageMapCmdJSON(t *testing.T) {
+	mc := &mockClient{}
+	cli := &CLI{Client: mc}
+	cmd := &PackageMapCmd{
+		Repo:         testRepo,
+		Format:       "json",
+		Limit:        25,
+		MinCount:     2,
+		IncludeTests: true,
+		IncludeFiles: true,
+	}
+
+	out := captureStdout(t, func() {
+		if err := cmd.Run(cli); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	if !mc.packageMapCalled {
+		t.Error("expected PackageMap to be called")
+	}
+	if mc.lastPackageMapReq.Repo != testRepo {
+		t.Errorf("repo: got %q, want %q", mc.lastPackageMapReq.Repo, testRepo)
+	}
+	if mc.lastPackageMapReq.Format != "json" || mc.lastPackageMapReq.Limit != 25 || mc.lastPackageMapReq.MinCount != 2 {
+		t.Fatalf("unexpected request: %#v", mc.lastPackageMapReq)
+	}
+	if !mc.lastPackageMapReq.IncludeTests || !mc.lastPackageMapReq.IncludeFiles {
+		t.Fatalf("expected IncludeTests and IncludeFiles in request: %#v", mc.lastPackageMapReq)
+	}
+	if !strings.Contains(out, "\"imports\"") || !strings.Contains(out, "\"summary\"") {
+		t.Fatalf("expected JSON package map output, got:\n%s", out)
+	}
+}
+
+func TestPackageMapCmdMermaid(t *testing.T) {
+	mc := &mockClient{}
+	cli := &CLI{Client: mc}
+	cmd := &PackageMapCmd{Repo: testRepo, Format: "mermaid", Limit: 10}
+
+	out := captureStdout(t, func() {
+		if err := cmd.Run(cli); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	if mc.lastPackageMapReq.Format != "mermaid" {
+		t.Fatalf("format = %q, expected mermaid", mc.lastPackageMapReq.Format)
+	}
+	if !strings.HasPrefix(out, "flowchart LR\n") {
+		t.Fatalf("expected Mermaid output, got:\n%s", out)
+	}
+}
+
+func TestPackageMapCmdDOT(t *testing.T) {
+	mc := &mockClient{}
+	cli := &CLI{Client: mc}
+	cmd := &PackageMapCmd{Repo: testRepo, Format: "dot", Limit: 10}
+
+	out := captureStdout(t, func() {
+		if err := cmd.Run(cli); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	if mc.lastPackageMapReq.Format != "dot" {
+		t.Fatalf("format = %q, expected dot", mc.lastPackageMapReq.Format)
+	}
+	if !strings.HasPrefix(out, "digraph PackageMap {\n") {
+		t.Fatalf("expected DOT output, got:\n%s", out)
+	}
 }
 
 func TestCypherCmd(t *testing.T) {

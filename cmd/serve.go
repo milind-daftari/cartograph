@@ -580,6 +580,19 @@ func (c *serverMCPClient) Impact(req service.ImpactRequest) (*service.ImpactResu
 	return res, nil
 }
 
+func (c *serverMCPClient) PackageMap(req service.PackageMapRequest) (*service.PackageMapResult, error) {
+	repo, be, err := c.resolveBackend(req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	req.Repo = repo
+	res, err := be.PackageMap(req)
+	if err != nil {
+		return nil, fmt.Errorf("package map: %w", err)
+	}
+	return res, nil
+}
+
 func (c *serverMCPClient) Cat(req service.CatRequest) (*service.CatResult, error) {
 	resolved, err := c.srv.ResolveRepoName(req.Repo)
 	if err != nil {
